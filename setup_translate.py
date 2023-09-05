@@ -16,7 +16,7 @@ class build_trans(cmd.Command):
 		pass
 
 	def run(self):
-		s = os.path.join('plugin', 'locale')
+		s = os.path.join('usr/lib/enigma2/python/Plugins/Extensions/WeatherPlugin', 'locale')
 		for lang in os.listdir(s):
 			lc = os.path.join(s, lang, 'LC_MESSAGES')
 			if os.path.isdir(lc):
