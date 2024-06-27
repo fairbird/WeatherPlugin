@@ -328,7 +328,10 @@ class MSNWeatherPluginEntryConfigScreen(ConfigListScreen, Screen):
 	def xmlCallback(self, xmlstring):
 		if xmlstring:
 			errormessage = ""
-			root = cet_fromstring(xmlstring)
+			try:
+				root = cet_fromstring(xmlstring)
+			except:
+				root = cet_fromstring(xmlstring.decode("utf-8").encode(" utf-16"))
 			for childs in root:
 				if childs.tag == "weather" and "errormessage" in childs.attrib:
 					errormessage = childs.attrib.get("errormessage")
@@ -418,7 +421,10 @@ class MSNWeatherPluginSearchResultList(MenuList):
 		return self.instance.getCurrentIndex()
 
 	def buildList(self, xml):
-		root = cet_fromstring(xml)
+		try:
+			root = cet_fromstring(xml)
+		except:
+			root = cet_fromstring(xml.decode("utf-8").encode(" utf-16"))
 		searchlocation = ""
 		searchresult = ""
 		weatherlocationcode = ""
