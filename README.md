@@ -3,7 +3,7 @@ WeatherPlugin [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blu
 
 Coded by Dr.Best
 
-Modified by RAED for py2 & py3
+Modified by RAED for py2 & py3 (Open source and DreamOS) images
 
 To install plugin directly online from telnet be this command ... لتثبيت البلجن مباشرة من خلال الإنترنيت بواسطة التلنت بهذا الأمر
 ```

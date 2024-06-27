@@ -1,4 +1,3 @@
-# Embedded file name: /usr/lib/enigma2/python/Components/Renderer/MSNWeatherPixmap.py
 from Components.Renderer.Renderer import Renderer
 from enigma import ePixmap
 from Components.AVSwitch import AVSwitch
@@ -9,7 +8,10 @@ class MSNWeatherPixmap(Renderer):
     def __init__(self):
         Renderer.__init__(self)
         self.picload = ePicLoad()
-        self.picload.PictureData.get().append(self.paintIconPixmapCB)
+        try:
+        	self.picload.PictureData.get().append(self.paintIconPixmapCB)
+        except:
+        	self.picload_conn = self.picload.PictureData.connect(self.paintIconPixmapCB)
         self.iconFileName = ''
 
     GUI_WIDGET = ePixmap
@@ -32,7 +34,10 @@ class MSNWeatherPixmap(Renderer):
          '#ff000000'))
 
     def disconnectAll(self):
-        self.picload.PictureData.get().remove(self.paintIconPixmapCB)
+    	try:
+        	self.picload.PictureData.get().remove(self.paintIconPixmapCB)
+        except:
+        	self.picload_conn = None
         self.picload = None
         Renderer.disconnectAll(self)
         return
