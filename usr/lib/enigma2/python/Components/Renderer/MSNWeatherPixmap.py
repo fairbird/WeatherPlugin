@@ -9,9 +9,9 @@ class MSNWeatherPixmap(Renderer):
         Renderer.__init__(self)
         self.picload = ePicLoad()
         try:
-        	self.picload.PictureData.get().append(self.paintIconPixmapCB)
+                self.picload.PictureData.get().append(self.paintIconPixmapCB)
         except:
-        	self.picload_conn = self.picload.PictureData.connect(self.paintIconPixmapCB)
+                self.picload_conn = self.picload.PictureData.connect(self.paintIconPixmapCB)
         self.iconFileName = ''
 
     GUI_WIDGET = ePixmap
@@ -34,10 +34,10 @@ class MSNWeatherPixmap(Renderer):
          '#ff000000'))
 
     def disconnectAll(self):
-    	try:
-        	self.picload.PictureData.get().remove(self.paintIconPixmapCB)
+        try:
+                self.picload.PictureData.get().remove(self.paintIconPixmapCB)
         except:
-        	self.picload_conn = None
+                self.picload_conn = None
         self.picload = None
         Renderer.disconnectAll(self)
         return
