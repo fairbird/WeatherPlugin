@@ -4,7 +4,7 @@ import setup_translate
 
 pkg = 'Extensions.WeatherPlugin'
 setup(name='enigma2-plugin-extensions-weatherplugin',
-       version='2.1',
+       version='2.2',
        description='Weather plugin',
        packages=[pkg],
        package_dir={pkg: 'usr'},
