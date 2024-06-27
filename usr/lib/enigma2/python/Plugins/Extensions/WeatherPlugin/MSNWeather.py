@@ -2,7 +2,7 @@
 #
 # WeatherPlugin E2
 #
-# Coded by Dr.Best (c) 2012-2013
+# Coded by Dr.Best (c) 2012
 # Support: www.dreambox-tools.info
 # E-Mail: dr.best@dreambox-tools.info
 #
@@ -21,247 +21,437 @@
 #
 
 # for localized messages
+from __future__ import print_function
 from . import _
 
+from enigma import eListboxPythonMultiContent, gFont, RT_HALIGN_LEFT, \
+	RT_VALIGN_CENTER, getDesktop
+from Screens.Screen import Screen
+from Screens.MessageBox import MessageBox
+from Components.MenuList import MenuList
+from Components.Sources.StaticText import StaticText
+from Components.ActionMap import ActionMap
+from Components.ConfigList import ConfigList, ConfigListScreen
+from Components.config import ConfigSubsection, ConfigText, ConfigSelection, \
+	getConfigListEntry, config, configfile
 from xml.etree.cElementTree import fromstring as cet_fromstring
-from twisted.internet import defer
-from twisted.web.client import getPage, downloadPage
-from enigma import eEnv
-from os import path as os_path, mkdir as os_mkdir, remove as os_remove, listdir as os_listdir
-from Components.config import config
-from Tools.Directories import resolveFilename, SCOPE_SKIN
-import six
+from twisted.web.client import getPage
+import six, os
 if six.PY2:
 	from urllib import quote as urllib_quote
 else:
 	from urllib.parse import quote as urllib_quote
 
-class WeatherIconItem:
-	def __init__(self, url = "", filename = "", index = -1, error = False):
-		self.url = url
-		self.filename = filename
-		self.index = index
-		self.error = error
-		
-class MSNWeatherItem:
-	def __init__(self):
-		self.temperature = ""
-		self.skytext = ""
-		self.humidity = ""
-		self.winddisplay = ""
-		self.observationtime = ""
-		self.observationpoint = ""
-		self.feelslike = ""
-		self.skycode = ""
-		self.date = ""
-		self.day = ""
-		self.low = ""
-		self.high = ""
-		self.skytextday = ""
-		self.skycodeday = ""
-		self.shortday = ""
-		self.iconFilename = ""
-		self.code = ""
-		
-class MSNWeather:
+def getDesktopSize():
+    s = getDesktop(0).size()
+    return (s.width(), s.height())
 
-	ERROR = 0
-	OK = 1
+def isHD():
+    desktopSize = getDesktopSize()
+    return desktopSize[0] == 1280
 
-	def __init__(self):
-		path = "/etc/enigma2/weather_icons/"
-		extension = self.checkIconExtension(path)
-		if extension is None:
-			path = os_path.dirname(resolveFilename(SCOPE_SKIN, config.skin.primary_skin.value)) + "/weather_icons/"
-			extension = self.checkIconExtension(path)
-		if extension is None:
-			path = eEnv.resolve("${libdir}/enigma2/python/Plugins/Extensions/WeatherPlugin/icons/")
-			extension = ".gif"
-		self.setIconPath(path)
-		self.setIconExtension(extension)
-		self.initialize()
+def DreamOS():
+    if os.path.exists('/var/lib/dpkg/status'):
+        return DreamOS
 
-	def checkIconExtension(self, path):
-		filename = None
-		extension = None
-		if os_path.exists(path):
-			try:
-				filename = os_listdir(path)[0]
-			except:
-				filename = None
-		if filename is not None:
-			try:
-				extension = os_path.splitext(filename)[1].lower()
-			except: pass
-		return extension
+def initWeatherPluginEntryConfig():
+	s = ConfigSubsection()
+	s.city = ConfigText(default = "Almere Haven", visible_width = 100, fixed_size = False)
+	s.degreetype = ConfigSelection(choices = [("C", _("metric system")), ("F", _("imperial system"))], default = "C")
+	s.weatherlocationcode = ConfigText(default = "wc:NLXX0032", visible_width = 100, fixed_size = False)
+	config.plugins.WeatherPlugin.Entry.append(s)
+	return s
 
-	def initialize(self):
-		self.city = ""
-		self.degreetype = ""
-		self.imagerelativeurl = ""
-		self.url = ""
-		self.weatherItems = {}
-		self.callback = None
-		self.callbackShowIcon = None
-		self.callbackAllIconsDownloaded = None
+def initConfig():
+	count = config.plugins.WeatherPlugin.entrycount.value
+	if count != 0:
+		i = 0
+		while i < count:
+			initWeatherPluginEntryConfig()
+			i += 1
 
-	def cancel(self):
-		self.callback = None
-		self.callbackShowIcon = None
+class MSNWeatherPluginEntriesListConfigScreen(Screen):
+	if isHD():
+		skin = """
+			<screen name="MSNWeatherPluginEntriesListConfigScreen" position="center,center" size="550,400">
+			<widget render="Label" source="city" position="5,60" size="400,50" font="Regular;20" halign="left"/>
+			<widget render="Label" source="degreetype" position="410,60" size="130,50" font="Regular;20" halign="left"/>
+			<widget name="entrylist" position="0,80" size="550,300" scrollbarMode="showOnDemand"/>
+			<widget render="Label" source="key_red" position="0,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="red" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_green" position="140,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="green" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_yellow" position="280,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="yellow" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_blue" position="420,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<ePixmap position="0,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+			<ePixmap position="140,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+			<ePixmap position="280,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+			<ePixmap position="420,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+			</screen>"""
+	else:
+		skin = """
+			<screen name="MSNWeatherPluginEntriesListConfigScreen" position="center,center" size="922,649">
+			<widget render="Label" source="city" position="10,73" size="754,50" font="Regular;28" halign="left"/>
+			<widget render="Label" source="degreetype" position="615,73" size="210,50" font="Regular;28" halign="left"/>
+			<widget name="entrylist" position="10,130" size="900,509" scrollbarMode="showOnDemand"/>
+			<widget render="Label" source="key_red" position="60,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="red" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_green" position="285,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="green" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_yellow" position="512,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="yellow" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_blue" position="756,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<ePixmap position="60,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+			<ePixmap position="285,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+			<ePixmap position="512,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+			<ePixmap position="756,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+			</screen>"""
 
-	def setIconPath(self, iconpath):
-		if not os_path.exists(iconpath):
-			os_mkdir(iconpath)
-		self.iconpath = iconpath
+	def __init__(self, session):
+		Screen.__init__(self, session)
+		self.title = _("WeatherPlugin: List of Entries")
+		self["city"] = StaticText(_("City"))
+		self["degreetype"] = StaticText(_("System"))
+		self["key_red"] = StaticText(_("Back"))
+		self["key_green"] = StaticText(_("Add"))
+		self["key_yellow"] = StaticText(_("Edit"))
+		self["key_blue"] = StaticText(_("Delete"))
+		self["entrylist"] = WeatherPluginEntryList([])
+		self["actions"] = ActionMap(["WizardActions","MenuActions","ShortcutActions"],
+			{
+			 "ok"	:	self.keyOK,
+			 "back"	:	self.keyClose,
+			 "red"	:	self.keyClose,
+			 "green":	self.keyGreen,
+			 "yellow":	self.keyYellow,
+			 "blue": 	self.keyDelete,
+			 }, -1)
+		self.updateList()
 
-	def setIconExtension(self, iconextension):
-		self.iconextension = iconextension
+	def updateList(self):
+		self["entrylist"].buildList()
 
-	def getWeatherData(self, degreetype, locationcode, city, callback, callbackShowIcon, callbackAllIconsDownloaded = None ):
-		self.initialize()
-		language = config.osd.language.value.replace("_","-")
-		if language == "en-EN": # hack
-			language = "en-US"
-		elif language == "no-NO": # hack
-			language = "nn-NO"
-		self.city = city
-		self.callback = callback
-		self.callbackShowIcon  = callbackShowIcon
-		self.callbackAllIconsDownloaded = callbackAllIconsDownloaded
-		url = "http://weather.service.msn.com/data.aspx?src=vista&weadegreetype=%s&culture=%s&wealocations=%s" % (degreetype, language, urllib_quote(locationcode))
-		getPage(six.ensure_binary(url)).addCallback(self.xmlCallback).addErrback(self.error)
+	def keyClose(self):
+		self.close(-1, None)
 
-	def getDefaultWeatherData(self, callback = None, callbackAllIconsDownloaded = None):
-		self.initialize()
-		weatherPluginEntryCount = config.plugins.WeatherPlugin.entrycount.value
-		if weatherPluginEntryCount >= 1:
-			weatherPluginEntry = config.plugins.WeatherPlugin.Entry[0]
-			self.getWeatherData(weatherPluginEntry.degreetype.value, weatherPluginEntry.weatherlocationcode.value, weatherPluginEntry.city.value, callback, None, callbackAllIconsDownloaded)
-			return 1
+	def keyGreen(self):
+		self.session.openWithCallback(self.updateList,MSNWeatherPluginEntryConfigScreen,None)
+
+	def keyOK(self):
+		try:sel = self["entrylist"].l.getCurrentSelection()[0]
+		except: sel = None
+		self.close(self["entrylist"].getCurrentIndex(), sel)
+
+	def keyYellow(self):
+		try:sel = self["entrylist"].l.getCurrentSelection()[0]
+		except: sel = None
+		if sel is None:
+			return
+		self.session.openWithCallback(self.updateList,MSNWeatherPluginEntryConfigScreen,sel)
+
+	def keyDelete(self):
+		try:sel = self["entrylist"].l.getCurrentSelection()[0]
+		except: sel = None
+		if sel is None:
+			return
+		self.session.openWithCallback(self.deleteConfirm, MessageBox, _("Really delete this WeatherPlugin Entry?"))
+
+	def deleteConfirm(self, result):
+		if not result:
+			return
+		sel = self["entrylist"].l.getCurrentSelection()[0]
+		config.plugins.WeatherPlugin.entrycount.value -= 1
+		config.plugins.WeatherPlugin.entrycount.save()
+		config.plugins.WeatherPlugin.Entry.remove(sel)
+		config.plugins.WeatherPlugin.Entry.save()
+		config.plugins.WeatherPlugin.save()
+		configfile.save()
+		self.updateList()
+
+class WeatherPluginEntryList(MenuList):
+	def __init__(self, list, enableWrapAround = True):
+		MenuList.__init__(self, list, enableWrapAround, eListboxPythonMultiContent)
+		if isHD():
+			self.l.setFont(0, gFont("Regular", 36))
+			self.l.setFont(1, gFont("Regular", 32))
 		else:
-			return 0
+			self.l.setFont(0, gFont("Regular", 40))
+			self.l.setFont(1, gFont("Regular", 34))
 
-	def error(self, error = None):
-		errormessage = ""
-		if error is not None:
-			errormessage = str(error.getErrorMessage())
-		if self.callback is not None:
-			self.callback(self.ERROR, errormessage)
+	def postWidgetCreate(self, instance):
+		MenuList.postWidgetCreate(self, instance)
+		if isHD():
+			instance.setItemHeight(40)
+		else:
+			instance.setItemHeight(55)
 
-	def errorIconDownload(self, error = None, item = None):
-		item.error = True
-		if os_path.exists(item.filename): # delete 0 kb file
-			os_remove(item.filename)
+	def getCurrentIndex(self):
+		return self.instance.getCurrentIndex()
 
-	def finishedIconDownload(self, result, item):
-		if not item.error:
-			self.showIcon(item.index,item.filename)
+	def buildList(self):
+		list = []
+		for c in config.plugins.WeatherPlugin.Entry:
+			if isHD():
+				res = [
+					c,
+					(eListboxPythonMultiContent.TYPE_TEXT, 5, 0, 400, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, str(c.city.value)),
+					(eListboxPythonMultiContent.TYPE_TEXT, 410, 0, 80, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, str(c.degreetype .value)),
+				]
+			else:
+				res = [
+					c,
+					(eListboxPythonMultiContent.TYPE_TEXT, 5, 0, 400, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, str(c.city.value)),
+					(eListboxPythonMultiContent.TYPE_TEXT, 600, 0, 80, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, str(c.degreetype .value)),
+				]
+			list.append(res)
+		self.list = list
+		self.l.setList(list)
+		self.moveToIndex(0)
 
-	def showIcon(self, index, filename):
-		if self.callbackShowIcon is not None:
-				self.callbackShowIcon(index, filename)
+class MSNWeatherPluginEntryConfigScreen(ConfigListScreen, Screen):
+	if isHD():
+		skin = """
+			<screen name="MSNWeatherPluginEntryConfigScreen" position="center,center" size="550,400">
+				<widget name="config" position="20,60" size="520,300" scrollbarMode="showOnDemand" />
+				<ePixmap position="0,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+				<ePixmap position="140,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+				<ePixmap position="420,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+				<ePixmap position="280,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+				<widget source="key_red" render="Label" position="0,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget source="key_green" render="Label" position="140,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_yellow" position="280,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="yellow" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget source="key_blue" render="Label" position="420,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			</screen>"""
+	else:
+		if DreamOS():
+			skin = """
+				<screen name="MSNWeatherPluginEntryConfigScreen" position="center,center" size="922,649">
+				<widget name="config" position="10,60" size="900,577" scrollbarMode="showOnDemand" />
+				<widget render="Label" source="key_red" position="60,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="red" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_green" position="285,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="green" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_yellow" position="508,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="yellow" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_blue" position="756,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<ePixmap position="60,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+				<ePixmap position="285,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+				<ePixmap position="512,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+				<ePixmap position="756,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+				</screen>"""
+		else:
+			skin = """
+				<screen name="MSNWeatherPluginEntryConfigScreen" position="center,center" size="922,649">
+				<widget name="config" position="10,60" size="900,577" font="Regular;28" itemHeight="35" scrollbarMode="showOnDemand" />
+				<widget render="Label" source="key_red" position="60,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="red" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_green" position="285,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="green" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_yellow" position="490,10" size="200,40" zPosition="5" valign="center" halign="center" backgroundColor="yellow" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<widget render="Label" source="key_blue" position="756,10" zPosition="5" size="140,40" valign="center" halign="center" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+				<ePixmap position="60,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+				<ePixmap position="285,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+				<ePixmap position="512,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+				<ePixmap position="756,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+				</screen>"""
 
-	def finishedAllDownloadFiles(self, result):
-		if self.callbackAllIconsDownloaded is not None:
-			self.callbackAllIconsDownloaded()
+	def __init__(self, session, entry):
+		Screen.__init__(self, session)
+		self.title = _("WeatherPlugin: Edit Entry")
+		self["actions"] = ActionMap(["SetupActions", "ColorActions"],
+		{
+			"green": self.keySave,
+			"red": self.keyCancel,
+			"blue": self.keyDelete,
+			"yellow": self.searchLocation,
+			"cancel": self.keyCancel
+		}, -2)
+
+		self["key_red"] = StaticText(_("Cancel"))
+		self["key_green"] = StaticText(_("OK"))
+		self["key_blue"] = StaticText(_("Delete"))
+		self["key_yellow"] = StaticText(_("Search Code"))
+
+		if entry is None:
+			self.newmode = 1
+			self.current = initWeatherPluginEntryConfig()
+		else:
+			self.newmode = 0
+			self.current = entry
+
+		cfglist = [
+			getConfigListEntry(_("City"), self.current.city),
+			getConfigListEntry(_("Location code"), self.current.weatherlocationcode),
+			getConfigListEntry(_("System"), self.current.degreetype)
+		]
+		ConfigListScreen.__init__(self, cfglist, session)
+
+	def searchLocation(self):
+		if self.current.city.value != "":
+			language = config.osd.language.value.replace("_","-")
+			if language == "en-EN": # hack
+				language = "en-US"
+			elif language == "no-NO": # hack
+				language = "nn-NO"
+			url = "http://weather.service.msn.com/find.aspx?src=vista&outputview=search&weasearchstr=%s&culture=%s" % (urllib_quote(self.current.city.value), language)
+			getPage(six.ensure_binary(url)).addCallback(self.xmlCallback).addErrback(self.error)
+		else:
+			self.session.open(MessageBox, _("You need to enter a valid city name before you can search for the location code."), MessageBox.TYPE_ERROR)
+
+	def keySave(self):
+		if self.current.city.value != "" and self.current.weatherlocationcode.value != "":
+			if self.newmode == 1:
+				config.plugins.WeatherPlugin.entrycount.value = config.plugins.WeatherPlugin.entrycount.value + 1
+				config.plugins.WeatherPlugin.entrycount.save()
+			ConfigListScreen.keySave(self)
+			config.plugins.WeatherPlugin.save()
+			configfile.save()
+			self.close()
+		else:
+			if self.current.city.value == "":
+				self.session.open(MessageBox, _("Please enter a valid city name."), MessageBox.TYPE_ERROR)
+			else:
+				self.session.open(MessageBox, _("Please enter a valid location code for the city."), MessageBox.TYPE_ERROR)
+
+	def keyCancel(self):
+		if self.newmode == 1:
+			config.plugins.WeatherPlugin.Entry.remove(self.current)
+		ConfigListScreen.cancelConfirm(self, True)
+
+	def keyDelete(self):
+		if self.newmode == 1:
+			self.keyCancel()
+		else:
+			self.session.openWithCallback(self.deleteConfirm, MessageBox, _("Really delete this WeatherPlugin Entry?"))
+
+	def deleteConfirm(self, result):
+		if not result:
+			return
+		config.plugins.WeatherPlugin.entrycount.value = config.plugins.WeatherPlugin.entrycount.value - 1
+		config.plugins.WeatherPlugin.entrycount.save()
+		config.plugins.WeatherPlugin.Entry.remove(self.current)
+		config.plugins.WeatherPlugin.Entry.save()
+		config.plugins.WeatherPlugin.save()
+		configfile.save()
+		self.close()
 
 	def xmlCallback(self, xmlstring):
-		IconDownloadList = []
-		root = cet_fromstring(xmlstring)
-		index = 0
-		self.degreetype = "C"
-		errormessage = ""
+		if xmlstring:
+			errormessage = ""
+			try:
+				root = cet_fromstring(xmlstring)
+			except:
+				root = cet_fromstring(xmlstring.decode("utf-8").encode(" utf-16"))
+			for childs in root:
+				if childs.tag == "weather" and "errormessage" in childs.attrib:
+					errormessage = childs.attrib.get("errormessage")
+					break
+			if len(errormessage) !=0:
+				self.session.open(MessageBox, errormessage, MessageBox.TYPE_ERROR)
+			else:
+				self.session.openWithCallback(self.searchCallback, MSNWeatherPluginSearch, xmlstring)
+
+	def error(self, error = None):
+		if error is not None:
+			print(error)
+
+	def searchCallback(self, result):
+		if result:
+			self.current.weatherlocationcode.value = result[0]
+			self.current.city.value = result[1]
+
+
+class MSNWeatherPluginSearch(Screen):
+	if isHD():
+		skin = """
+			<screen name="MSNWeatherPluginSearch" position="center,center" size="550,400">
+			<widget name="entrylist" position="0,60" size="550,200" scrollbarMode="showOnDemand"/>
+			<widget render="Label" source="key_red" position="0,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="red" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_green" position="140,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="green" font="Regular;21" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<ePixmap position="0,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+			<ePixmap position="140,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+			<ePixmap position="280,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+			<ePixmap position="420,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+			</screen>"""
+	else:
+		skin = """
+			<screen name="MSNWeatherPluginSearch" position="center,center" size="922,649">
+			<widget name="entrylist" position="10,60" size="900,577" scrollbarMode="showOnDemand" />
+			<widget render="Label" source="key_red" position="60,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="red" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<widget render="Label" source="key_green" position="285,10" size="140,40" zPosition="5" valign="center" halign="center" backgroundColor="green" font="Regular;26" transparent="1" foregroundColor="white" shadowColor="black" shadowOffset="-1,-1" />
+			<ePixmap position="60,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/red.png" transparent="1" alphatest="on" />
+			<ePixmap position="285,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/green.png" transparent="1" alphatest="on" />
+			<ePixmap position="512,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/yellow.png" transparent="1" alphatest="on" />
+			<ePixmap position="756,10" zPosition="4" size="140,40" pixmap="skin_default/buttons/blue.png" transparent="1" alphatest="on" />
+			</screen>"""
+		
+
+	def __init__(self, session, xmlstring):
+		Screen.__init__(self, session)
+		self.title = _("MSN location search result")
+		self["key_red"] = StaticText(_("Back"))
+		self["key_green"] = StaticText(_("OK"))		
+		self["entrylist"] = MSNWeatherPluginSearchResultList([])
+		self["actions"] = ActionMap(["WizardActions","MenuActions","ShortcutActions"],
+			{
+			 "ok"	:	self.keyOK,
+			 "green": self.keyOK,
+			 "back"	:	self.keyClose,
+			 "red": self.keyClose,
+			 }, -1)
+		self.updateList(xmlstring)
+
+	def updateList(self, xmlstring):
+		self["entrylist"].buildList(xmlstring)
+
+	def keyClose(self):
+		self.close(None)
+
+	def keyOK(self):
+		pass
+		try:sel = self["entrylist"].l.getCurrentSelection()[0]
+		except: sel = None
+		self.close(sel)
+
+
+class MSNWeatherPluginSearchResultList(MenuList):
+	def __init__(self, list, enableWrapAround = True):
+		MenuList.__init__(self, list, enableWrapAround, eListboxPythonMultiContent)
+		self.l.setFont(0, gFont("Regular", 36))
+		self.l.setFont(1, gFont("Regular", 28))
+
+	def postWidgetCreate(self, instance):
+		MenuList.postWidgetCreate(self, instance)
+		if isHD():
+			instance.setItemHeight(44)
+		else:
+			instance.setItemHeight(55)
+
+	def getCurrentIndex(self):
+		return self.instance.getCurrentIndex()
+
+	def buildList(self, xml):
+		try:
+			root = cet_fromstring(xml)
+		except:
+			root = cet_fromstring(xml.decode("utf-8").encode(" utf-16"))
+		searchlocation = ""
+		searchresult = ""
+		weatherlocationcode = ""
+		list = []
 		for childs in root:
 			if childs.tag == "weather":
-				#if six.PY2:
-				#	errormessage = childs.attrib.get("errormessage").encode("utf-8", 'ignore')
-				#else:
-				errormessage = childs.attrib.get("errormessage")
-				if errormessage:
-					if self.callback is not None:
-						if six.PY2:
-							self.callback(self.ERROR, errormessage.encode("utf-8", 'ignore'))
-						else:
-							self.callback(self.ERROR, errormessage)
-					break
 				if six.PY2:
-					self.degreetype = childs.attrib.get("degreetype").encode("utf-8", 'ignore')
-					self.imagerelativeurl = "%slaw/" % childs.attrib.get("imagerelativeurl").encode("utf-8", 'ignore')
-					self.url = childs.attrib.get("url").encode("utf-8", 'ignore')
+					searchlocation = childs.attrib.get("weatherlocationname").encode("utf-8", 'ignore')
+					searchresult = childs.attrib.get("weatherfullname").encode("utf-8", 'ignore')
+					weatherlocationcode = childs.attrib.get("weatherlocationcode").encode("utf-8", 'ignore')
 				else:
-					self.degreetype = childs.attrib.get("degreetype")
-					self.imagerelativeurl = "%slaw/" % childs.attrib.get("imagerelativeurl")
-					self.url = childs.attrib.get("url")
-			for items in childs:
-				if items.tag == "current":
-					currentWeather = MSNWeatherItem()
-					if six.PY2:
-						currentWeather.temperature = items.attrib.get("temperature").encode("utf-8", 'ignore')
-						currentWeather.skytext = items.attrib.get("skytext").encode("utf-8", 'ignore')
-						currentWeather.humidity = items.attrib.get("humidity").encode("utf-8", 'ignore')
-						currentWeather.winddisplay = items.attrib.get("winddisplay").encode("utf-8", 'ignore')
-						currentWeather.observationtime = items.attrib.get("observationtime").encode("utf-8", 'ignore')
-						currentWeather.observationpoint = items.attrib.get("observationpoint").encode("utf-8", 'ignore')
-						currentWeather.feelslike = items.attrib.get("feelslike").encode("utf-8", 'ignore')
-						currentWeather.skycode = "%s%s" % (items.attrib.get("skycode").encode("utf-8", 'ignore'), self.iconextension)
-						currentWeather.code = items.attrib.get("skycode").encode("utf-8", 'ignore')
-					else:
-						currentWeather.temperature = items.attrib.get("temperature")
-						currentWeather.skytext = items.attrib.get("skytext")
-						currentWeather.humidity = items.attrib.get("humidity")
-						currentWeather.winddisplay = items.attrib.get("winddisplay")
-						currentWeather.observationtime = items.attrib.get("observationtime")
-						currentWeather.observationpoint = items.attrib.get("observationpoint")
-						currentWeather.feelslike = items.attrib.get("feelslike")
-						currentWeather.skycode = "%s%s" % (items.attrib.get("skycode"), self.iconextension)
-						currentWeather.code = items.attrib.get("skycode")
-					filename = "%s%s"  % (self.iconpath, currentWeather.skycode)
-					currentWeather.iconFilename = filename
-					if not os_path.exists(filename):
-						url = "%s%s" % (self.imagerelativeurl, currentWeather.skycode)
-						IconDownloadList.append(WeatherIconItem(url = url,filename = filename, index = -1))
-					else:
-						self.showIcon(-1,filename)
-					self.weatherItems[str(-1)] = currentWeather
-				elif items.tag == "forecast" and index <= 4:
-					index +=1
-					weather = MSNWeatherItem()
-					if six.PY2:
-						weather.date = items.attrib.get("date").encode("utf-8", 'ignore')
-						weather.day = items.attrib.get("day").encode("utf-8", 'ignore')
-						weather.shortday = items.attrib.get("shortday").encode("utf-8", 'ignore')
-						weather.low = items.attrib.get("low").encode("utf-8", 'ignore')
-						weather.high = items.attrib.get("high").encode("utf-8", 'ignore')
-						weather.skytextday = items.attrib.get("skytextday").encode("utf-8", 'ignore')
-						weather.skycodeday = "%s%s" % (items.attrib.get("skycodeday").encode("utf-8", 'ignore'), self.iconextension)
-						weather.code = items.attrib.get("skycodeday").encode("utf-8", 'ignore')
-					else:
-						weather.date = items.attrib.get("date")
-						weather.day = items.attrib.get("day")
-						weather.shortday = items.attrib.get("shortday")
-						weather.low = items.attrib.get("low")
-						weather.high = items.attrib.get("high")
-						weather.skytextday = items.attrib.get("skytextday")
-						weather.skycodeday = "%s%s" % (items.attrib.get("skycodeday"), self.iconextension)
-						weather.code = items.attrib.get("skycodeday")
-					filename = "%s%s"  % (self.iconpath, weather.skycodeday)
-					weather.iconFilename = filename
-					if not os_path.exists(filename):
-						url = "%s%s" % (self.imagerelativeurl, weather.skycodeday)
-						IconDownloadList.append(WeatherIconItem(url = url,filename = filename, index = index))
-					else:
-						self.showIcon(index,filename)
-					self.weatherItems[str(index)] = weather
-
-		if len(IconDownloadList) != 0:
-			ds = defer.DeferredSemaphore(tokens=len(IconDownloadList))
-			downloads = [ds.run(download,item ).addErrback(self.errorIconDownload, item).addCallback(self.finishedIconDownload,item) for item in IconDownloadList]
-			finished = defer.DeferredList(downloads).addErrback(self.error).addCallback(self.finishedAllDownloadFiles)
-		else:
-			self.finishedAllDownloadFiles(None)
-
-		if self.callback is not None:
-			self.callback(self.OK, None)
-
-def download(item):
-	return downloadPage(item.url, file(item.filename, 'wb'))
+					searchlocation = childs.attrib.get("weatherlocationname")
+					searchresult = childs.attrib.get("weatherfullname")
+					weatherlocationcode = childs.attrib.get("weatherlocationcode")
+				if isHD():
+					res = [
+						(weatherlocationcode, searchlocation),
+						(eListboxPythonMultiContent.TYPE_TEXT, 5, 0, 500, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, searchlocation),
+						(eListboxPythonMultiContent.TYPE_TEXT, 5, 40, 500, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, searchresult),
+					]
+				else:
+					res = [
+						(weatherlocationcode, searchlocation),
+						(eListboxPythonMultiContent.TYPE_TEXT, 5, 0, 500, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, searchlocation),
+						(eListboxPythonMultiContent.TYPE_TEXT, 5, 40, 500, 50, 1, RT_HALIGN_LEFT|RT_VALIGN_CENTER, searchresult),
+					]
+				list.append(res)
+		self.list = list
+		self.l.setList(list)
+		self.moveToIndex(0)
