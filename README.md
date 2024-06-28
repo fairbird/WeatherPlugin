@@ -7,5 +7,5 @@ Modified by RAED for py2 & py3 (Open source and DreamOS) images
 
 To install plugin directly online from telnet be this command ... لتثبيت البلجن مباشرة من خلال الإنترنيت بواسطة التلنت بهذا الأمر
 ```
-wget "--no-check-certificate" https://raw.githubusercontent.com/fairbird/WeatherPlugin/master/installer.sh -O - | /bin/sh
+wget https://raw.githubusercontent.com/fairbird/WeatherPlugin/master/installer.sh -O - | /bin/sh
 ```
