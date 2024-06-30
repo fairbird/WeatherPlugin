@@ -128,7 +128,7 @@ class MSNWeather:
 		self.callback = callback
 		self.callbackShowIcon  = callbackShowIcon
 		self.callbackAllIconsDownloaded = callbackAllIconsDownloaded
-		url = "http://weather.service.msn.com/data.aspx?src=vista&weadegreetype=%s&culture=%s&wealocations=%s" % (degreetype, language, urllib_quote(locationcode))
+		url = "http://weather.service.msn.com/data.aspx?src=outlook&weadegreetype=%s&culture=%s&wealocations=%s" % (degreetype, language, urllib_quote(locationcode))
 		getPage(six.ensure_binary(url)).addCallback(self.xmlCallback).addErrback(self.error)
 
 	def getDefaultWeatherData(self, callback = None, callbackAllIconsDownloaded = None):
