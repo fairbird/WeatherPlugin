@@ -50,25 +50,34 @@ initConfig()
 
 
 def getDesktopSize():
-    s = getDesktop(0).size()
-    return (s.width(), s.height())
+	s = getDesktop(0).size()
+	return (s.width(), s.height())
+
 
 def isHD():
-    desktopSize = getDesktopSize()
-    return desktopSize[0] == 1280
+	desktopSize = getDesktopSize()
+	return desktopSize[0] == 1280
+
+
+def isUHD():
+	desktopSize = getDesktopSize()
+	return desktopSize[0] == 2560 or desktopSize[0] == 3840
+
 
 def main(session,**kwargs):
 	session.open(MSNWeatherPlugin)
+
 
 def Plugins(**kwargs):
 	list = [PluginDescriptor(name=_("Weather Plugin"), description=_("Show Weather Forecast"), where = [PluginDescriptor.WHERE_PLUGINMENU, PluginDescriptor.WHERE_EXTENSIONSMENU], icon = "weather.png", fnc=main)]
 	return list
 
+
 class MSNWeatherPlugin(Screen):
 
 	if isHD():
 		skin = """
-			<screen name="MSNWeatherPlugin" position="center,center" size="664,340" title="Weather Plugin">
+			<screen name="MSNWeatherPlugin" position="center,center" size="664,365" title="Weather Plugin" backgroundColor="#16000000">
 			<widget render="Label" source="caption" position="10,20" zPosition="1" size="600,28" font="Regular;24" transparent="1"/>
 			<widget render="Label" source="observationtime" position="374,45" zPosition="1" size="280,20" font="Regular;14" transparent="1" halign="right" />
 			<widget render="Label" source="observationpoint" position="204,65" zPosition="1" size="450,40" font="Regular;14" transparent="1" halign="right" />
@@ -93,11 +102,12 @@ class MSNWeatherPlugin(Screen):
 			<widget render="Label" source="weekday5" position="515,170" zPosition="1" size="105,40" halign="center" valign="center" font="Regular;18" transparent="1"/>
 			<widget name="weekday5_icon" position="540,215" zPosition="1" size="55,45" alphatest="blend"/>
 			<widget render="Label" source="weekday5_temp" position="515,270" zPosition="1" size="105,60" halign="center" valign="bottom" font="Regular;16" transparent="1"/>
-			<widget render="Label" source="statustext" position="0,0" zPosition="1" size="664,340" font="Regular;20" halign="center" valign="center" transparent="1"/>
+			<widget render="Label" source="statustext" position="0,0" zPosition="1" size="664,365" font="Regular;20" halign="center" valign="center" transparent="1"/>
+			<eLabel text="Press Menu to change city" position="65,345" size="208,18" font="Regular;16" backgroundColor="#16000000" transparent="1" zPosition="3" valign="center"/>
 			</screen>"""
 	else:
 		skin = """
-			<screen name="MSNWeatherPlugin" position="center,center" size="1398,870" title="Weather Plugin">
+			<screen name="MSNWeatherPlugin" position="center,center" size="1398,885" title="Weather Plugin" backgroundColor="#16000000">
 			<widget render="Label" source="caption" position="15,35" zPosition="1" size="867,58" font="Regular;35"  transparent="1"/>
 			<widget render="Label" source="observationtime" position="1020,41" zPosition="1" size="350,40" font="Regular;30" transparent="1" halign="right" />
 			<widget render="Label" source="observationpoint" position="920,93" zPosition="1" size="450,40" font="Regular;30" transparent="1" halign="right" />
@@ -122,7 +132,9 @@ class MSNWeatherPlugin(Screen):
 			<widget render="Label" source="weekday5" position="1133,476" zPosition="1" size="225,70" halign="center" valign="center" font="Regular;28" transparent="1"/>
 			<widget name="weekday5_icon" position="1168,580" zPosition="1" size="150,150" alphatest="blend"/>
 			<widget render="Label" source="weekday5_temp" position="1133,706" zPosition="1" size="225,117" halign="center" valign="bottom" font="Regular;28" transparent="1"/>
-				</screen>"""
+			<widget render="Label" source="statustext" position="0,0" zPosition="1" size="1398,885" font="Regular;28" halign="center" valign="center" transparent="1"/>
+			<eLabel text="Press Menu to change city" position="109,835" size="487,45" font="Regular;28" backgroundColor="#16000000" transparent="1" zPosition="3" valign="center"/>
+			</screen>"""
 	
 	def __init__(self, session):
 		Screen.__init__(self, session)
