@@ -73,7 +73,7 @@ def initConfig():
 class MSNWeatherPluginEntriesListConfigScreen(Screen):
 	if isHD():
 		skin = """
-			<screen name="MSNWeatherPluginEntriesListConfigScreen" position="center,center" size="550,400">
+			<screen name="MSNWeatherPluginEntriesListConfigScreen" position="center,center" size="550,400" backgroundColor="#16000000">
 			<widget render="Label" source="city" position="5,60" size="400,50" font="Regular;20" halign="left"/>
 			<widget render="Label" source="degreetype" position="410,60" size="130,50" font="Regular;20" halign="left"/>
 			<widget name="entrylist" position="0,80" size="550,300" scrollbarMode="showOnDemand"/>
@@ -88,7 +88,7 @@ class MSNWeatherPluginEntriesListConfigScreen(Screen):
 			</screen>"""
 	else:
 		skin = """
-			<screen name="MSNWeatherPluginEntriesListConfigScreen" position="center,center" size="922,649">
+			<screen name="MSNWeatherPluginEntriesListConfigScreen" position="center,center" size="922,649" backgroundColor="#16000000">
 			<widget render="Label" source="city" position="10,73" size="754,50" font="Regular;28" halign="left"/>
 			<widget render="Label" source="degreetype" position="615,73" size="210,50" font="Regular;28" halign="left"/>
 			<widget name="entrylist" position="10,130" size="900,509" scrollbarMode="showOnDemand"/>
